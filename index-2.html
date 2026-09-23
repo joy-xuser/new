@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Agomoni Sur — YouTube Playlist</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#080808;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+body{background:radial-gradient(circle at 50% 10%,#302033 0,transparent 38%),linear-gradient(#101010,#070707)}
+.wrap{min-height:100vh;display:grid;place-items:center;padding:14px}
+.card{width:min(920px,100%);padding:20px;border:1px solid #fff1;border-radius:28px;background:#0d0d0ddd;backdrop-filter:blur(24px);box-shadow:0 25px 80px #000b}
+.head{text-align:center;margin:2px 0 18px}.eyebrow{font-size:11px;letter-spacing:5px;color:#aaa}.head h1{margin:5px 0 2px;font-size:clamp(28px,7vw,45px);letter-spacing:2px}.head p{margin:0;color:#999;font-size:13px}
+.main{display:grid;grid-template-columns:270px 1fr;gap:20px;align-items:center}.video{aspect-ratio:16/10;border-radius:20px;overflow:hidden;border:1px solid #fff2;background:#111}.video iframe{width:100%;height:100%;border:0}
+.info{min-width:0}.title{font-size:clamp(18px,3.5vw,28px);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.status{font-size:12px;color:#aaa;min-height:18px;margin-top:6px}
+.progress{height:5px;border-radius:20px;background:#fff2;margin:20px 0 7px;cursor:pointer}.bar{height:100%;width:0;border-radius:20px;background:#f5bb4e}.times{display:flex;justify-content:space-between;color:#888;font-size:11px}
+.controls{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:17px}button{font:inherit}.ctrl{width:46px;height:46px;border-radius:50%;border:1px solid #fff2;background:#fff0;color:#fff;font-size:17px;cursor:pointer}.ctrl:hover{background:#fff1}.play{width:60px;height:60px;border:0;border-radius:50%;background:#f5bb4e;color:#111;font-size:21px;cursor:pointer}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:17px}.panel{border:1px solid #fff2;border-radius:20px;background:#0003;padding:14px}.panelhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}.panelhead b{font-size:14px}.panelhead span{font-size:11px;color:#888}
+.list{max-height:245px;overflow:auto}.list::-webkit-scrollbar{width:5px}.list::-webkit-scrollbar-thumb{background:#fff2;border-radius:9px}.track{width:100%;display:flex;gap:10px;align-items:center;text-align:left;border:0;border-bottom:1px solid #fff0a;background:transparent;color:#ccc;padding:10px 7px;border-radius:10px;cursor:pointer}.track:hover{background:#fff1}.track.active{background:#f5bb4e18;color:#ffd77a}.num{width:22px;color:#777;font-size:11px}.trackname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.hint{font-size:12px;line-height:1.6;color:#999}
+@media(max-width:700px){.wrap{padding:9px}.card{padding:14px;border-radius:22px}.main{grid-template-columns:1fr}.video{max-height:210px}.grid{grid-template-columns:1fr}.list{max-height:205px}}
+</style>
+</head>
+<body>
+<div class="wrap"><main class="card">
+<header class="head"><div class="eyebrow">শারদ আগমনী</div><h1>AGOMONI SUR</h1><p>YouTube Playlist Music Player</p></header>
+
+<section class="main">
+  <div class="video"><div id="ytplayer"></div></div>
+  <div class="info">
+    <div class="title" id="title">Playlist loading…</div>
+    <div class="status" id="status">YouTube player প্রস্তুত হচ্ছে</div>
+    <div class="progress" id="progress"><div class="bar" id="bar"></div></div>
+    <div class="times"><span id="cur">0:00</span><span id="dur">0:00</span></div>
+    <div class="controls">
+      <button class="ctrl" id="prev" title="Previous">⏮</button>
+      <button class="play" id="play" title="Play/Pause">▶</button>
+      <button class="ctrl" id="next" title="Next">⏭</button>
+    </div>
+  </div>
+</section>
+
+<section class="grid">
+ <div class="panel">
+   <div class="panelhead"><b>Playlist</b><span id="count">Loading…</span></div>
+   <div class="list" id="list"><div class="hint">Playlist-এর গানগুলো load হচ্ছে…</div></div>
+ </div>
+ <div class="panel">
+   <div class="panelhead"><b>Auto-skip</b><span>Enabled</span></div>
+   <div class="hint">যে ভিডিওতে YouTube <b>Error 150 / 101</b> দেয়, সেটি automatically skip করে পরের playable গান চালানোর চেষ্টা করবে।</div>
+ </div>
+</section>
+</main></div>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+const PLAYLIST_ID="PLJ1IA70YPJo7vf4G-XynDo0Gp0yYrSb9S";
+
+let player=null, ready=false, tracks=[], titles={};
+let skipBusy=false, skipTimer=null, currentGuess=0, tried=new Set();
+
+const $=id=>document.getElementById(id);
+const origin=(location.protocol==="https:"||location.protocol==="http:")?location.origin:"";
+
+function onYouTubeIframeAPIReady(){
+  player=new YT.Player("ytplayer",{
+    width:"100%",height:"100%",
+    playerVars:{
+      listType:"playlist",
+      list:PLAYLIST_ID,
+      autoplay:0,
+      controls:1,
+      playsinline:1,
+      enablejsapi:1,
+      rel:0,
+      ...(origin?{origin}: {})
+    },
+    events:{onReady:onReady,onStateChange:onStateChange,onError:onError}
+  });
+}
+
+function onReady(){
+  ready=true;
+  $("status").textContent="Playlist loading…";
+  waitForPlaylist();
+  setInterval(updateProgress,400);
+}
+
+function waitForPlaylist(){
+  if(!ready)return;
+  const list=player.getPlaylist ? (player.getPlaylist()||[]) : [];
+  if(list.length){
+    tracks=list.slice();
+    $("count").textContent=tracks.length+" songs";
+    renderTracks();
+    $("status").textContent="Playlist ready";
+    // Get real titles progressively.
+    tracks.forEach((id,i)=>fetchTitle(id,i));
+    return;
+  }
+  setTimeout(waitForPlaylist,350);
+}
+
+async function fetchTitle(id,i){
+  try{
+    const r=await fetch(
+      "https://www.youtube.com/oembed?url="+
+      encodeURIComponent("https://www.youtube.com/watch?v="+id)+
+      "&format=json"
+    );
+    if(!r.ok)throw new Error("oembed");
+    const d=await r.json();
+    if(d.title){
+      titles[id]=d.title;
+      renderTracks();
+      const vd=player.getVideoData ? player.getVideoData() : {};
+      if(vd.video_id===id)$("title").textContent=d.title;
+    }
+  }catch(e){}
+}
+
+function renderTracks(){
+  if(!tracks.length){
+    $("list").innerHTML='<div class="hint">Playlist-এর গান পাওয়া যাচ্ছে না।</div>';
+    return;
+  }
+  const idx=getCurrentIndex();
+  $("list").innerHTML="";
+  tracks.forEach((id,i)=>{
+    const b=document.createElement("button");
+    b.className="track"+(i===idx?" active":"");
+    const n=document.createElement("span");
+    n.className="num";
+    n.textContent=String(i+1).padStart(2,"0");
+    const t=document.createElement("span");
+    t.className="trackname";
+    t.textContent=titles[id]||("YouTube video "+(i+1));
+    b.append(n,t);
+    b.onclick=()=>{
+      skipBusy=false;
+      tried.clear();
+      currentGuess=i;
+      player.playVideoAt(i);
+    };
+    $("list").appendChild(b);
+  });
+}
+
+function getCurrentIndex(){
+  if(!player)return -1;
+
+  // Normal API route.
+  try{
+    const i=player.getPlaylistIndex();
+    if(Number.isInteger(i) && i>=0 && i<tracks.length){
+      currentGuess=i;
+      return i;
+    }
+  }catch(e){}
+
+  // Fallback: identify the current video by ID.
+  try{
+    const vd=player.getVideoData();
+    const id=vd && vd.video_id;
+    const i=tracks.indexOf(id);
+    if(i>=0){
+      currentGuess=i;
+      return i;
+    }
+  }catch(e){}
+
+  return (currentGuess>=0 && currentGuess<tracks.length)?currentGuess:-1;
+}
+
+function onStateChange(e){
+  if(e.data===YT.PlayerState.PLAYING){
+    skipBusy=false;
+    clearTimeout(skipTimer);
+    $("play").textContent="❚❚";
+    $("status").textContent="Playing";
+    updateTitle();
+  }else if(e.data===YT.PlayerState.PAUSED){
+    $("play").textContent="▶";
+    $("status").textContent="Paused";
+  }else if(e.data===YT.PlayerState.ENDED){
+    $("play").textContent="▶";
+    $("status").textContent="Next track…";
+  }
+  renderTracks();
+}
+
+function updateTitle(){
+  if(!player || !player.getVideoData)return;
+  const d=player.getVideoData();
+  if(d && d.video_id){
+    const id=d.video_id;
+    if(d.title){
+      titles[id]=d.title;
+      $("title").textContent=d.title;
+    }
+  }
+}
+
+/*
+  Error 150/101 means embedding is disabled for that video.
+  We do NOT try to bypass it. Instead we explicitly select the
+  next playlist index with playVideoAt(), which is more reliable
+  than nextVideo() when the failed item is the first item.
+*/
+function onError(e){
+  const code=e.data;
+
+  if(code===150 || code===101 || code===100){
+    autoSkipUnavailable(code);
+    return;
+  }
+
+  $("status").textContent="YouTube playback error "+code;
+}
+
+function autoSkipUnavailable(code){
+  if(!tracks.length){
+    waitForPlaylist();
+    return;
+  }
+
+  const failedIndex=getCurrentIndex();
+
+  if(failedIndex>=0){
+    tried.add(failedIndex);
+  }
+
+  if(skipBusy)return;
+  skipBusy=true;
+
+  $("status").textContent=(code===150||code===101)
+    ?"Embedding unavailable — skipping…"
+    :"Video unavailable — skipping…";
+
+  clearTimeout(skipTimer);
+
+  // Search forward first, then wrap around once.
+  let next=-1;
+  const start=(failedIndex>=0?failedIndex:currentGuess);
+
+  for(let step=1;step<=tracks.length;step++){
+    const candidate=(start+step)%tracks.length;
+    if(!tried.has(candidate)){
+      next=candidate;
+      break;
+    }
+  }
+
+  if(next<0){
+    $("status").textContent="No more playable tracks in this playlist";
+    skipBusy=false;
+    tried.clear();
+    return;
+  }
+
+  currentGuess=next;
+  tried.add(next);
+
+  // Give the API a moment, then explicitly load the next index.
+  skipTimer=setTimeout(()=>{
+    try{
+      player.playVideoAt(next);
+    }catch(err){
+      skipBusy=false;
+      autoSkipUnavailable(150);
+      return;
+    }
+
+    // If the next item itself errors, onError() will call this again.
+    setTimeout(()=>{
+      skipBusy=false;
+    },1200);
+  },180);
+}
+
+function updateProgress(){
+  if(!ready || !player)return;
+  let d=0,c=0;
+  try{
+    d=player.getDuration?player.getDuration():0;
+    c=player.getCurrentTime?player.getCurrentTime():0;
+  }catch(e){}
+  $("cur").textContent=fmt(c);
+  $("dur").textContent=fmt(d);
+  $("bar").style.width=(d?Math.min(100,c/d*100):0)+"%";
+}
+
+function fmt(x){
+  x=Math.floor(x||0);
+  return Math.floor(x/60)+":"+String(x%60).padStart(2,"0");
+}
+
+$("play").onclick=()=>{
+  if(!ready)return;
+  if(player.getPlayerState()===YT.PlayerState.PLAYING)player.pauseVideo();
+  else player.playVideo();
+};
+
+$("next").onclick=()=>{
+  if(!ready||!tracks.length)return;
+  skipBusy=false;
+  tried.clear();
+  const i=getCurrentIndex();
+  const next=(i>=0?(i+1)%tracks.length:1%tracks.length);
+  currentGuess=next;
+  player.playVideoAt(next);
+};
+
+$("prev").onclick=()=>{
+  if(!ready||!tracks.length)return;
+  skipBusy=false;
+  tried.clear();
+  const i=getCurrentIndex();
+  const prev=(i>0?i-1:tracks.length-1);
+  currentGuess=prev;
+  player.playVideoAt(prev);
+};
+
+$("progress").onclick=e=>{
+  if(!ready||!player.getDuration)return;
+  const r=e.currentTarget.getBoundingClientRect();
+  const pct=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
+  player.seekTo(player.getDuration()*pct,true);
+};
+</script>
+</body>
+</html>
